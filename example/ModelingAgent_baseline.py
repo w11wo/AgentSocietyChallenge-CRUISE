@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from langchain_core.embeddings import Embeddings
-from typing import List
+from typing import List, Dict, Optional, Union
 import requests
 
 logger = logging.getLogger("websocietysimulator")
@@ -97,14 +97,49 @@ class vLLMEmbeddings(Embeddings):
         return embeddings[0]
 
 
-class vLLM(InfinigenceLLM):
+class vLLM(LLMBase):
     def __init__(self, api_key: str, model: str = "Qwen/Qwen2.5-72B-Instruct-AWQ"):
-        super().__init__(api_key, model)
+        super().__init__(model)
         self.client = OpenAI(
             base_url="https://pd-wilso-vllm-api-ec0de7122faa4abdac4d5c48074b9870.nvidia-oci.saturnenterprise.io/v1/",
             api_key=api_key,
         )
         self.embedding_model = vLLMEmbeddings(api_key=api_key)
+
+    @retry(
+        retry=retry_if_exception_type(Exception),
+        wait=wait_exponential(multiplier=1, min=10, max=300),
+        stop=stop_after_attempt(10),
+    )
+    def __call__(
+        self,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        temperature: float = 0.0,
+        max_tokens: int = 500,
+        stop_strs: Optional[List[str]] = None,
+        n: int = 1,
+    ) -> Union[str, List[str]]:
+        try:
+            response = self.client.chat.completions.create(
+                model=model or self.model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stop=stop_strs,
+                n=n,
+            )
+
+            if n == 1:
+                return response.choices[0].message.content
+            else:
+                return [choice.message.content for choice in response.choices]
+        except Exception as e:
+            logger.error(f"LLM Error: {e}")
+            raise e
+
+    def get_embedding_model(self):
+        return self.embedding_model
 
 
 class MySimulationAgent(SimulationAgent):
@@ -201,8 +236,7 @@ if __name__ == "__main__":
 
     # Run the simulation
     # If you don't set the number of tasks, the simulator will run all tasks.
-    # TODO: increase the number of tasks to 100; max_workers=10
-    outputs = simulator.run_simulation(number_of_tasks=50, enable_threading=True, max_workers=4)
+    outputs = simulator.run_simulation(number_of_tasks=100, enable_threading=True, max_workers=8)
 
     # Evaluate the agent
     evaluation_results = simulator.evaluate()
