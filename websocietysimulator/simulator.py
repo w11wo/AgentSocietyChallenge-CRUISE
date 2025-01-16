@@ -344,6 +344,7 @@ class Simulator:
         return {
             'type': 'simulation',
             'metrics': metrics.__dict__,
+            'outputs': [{"simulated": sim, "ground_truth": gt} for sim, gt in zip(simulated_data, ground_truth_data)]
         }
 
     def get_evaluation_history(self) -> List[Dict[str, Any]]:
