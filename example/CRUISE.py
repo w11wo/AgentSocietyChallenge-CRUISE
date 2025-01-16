@@ -1,7 +1,7 @@
 from websocietysimulator.agent import SimulationAgent
 from websocietysimulator.llm import LLMBase
 from websocietysimulator.agent.modules.planning_modules import PlanningBase
-from websocietysimulator.agent.modules.reasoning_modules import ReasoningBase
+from websocietysimulator.agent.modules.reasoning_modules import ReasoningCOTSC
 from websocietysimulator.agent.modules.memory_modules import MemoryGenerative
 
 
@@ -29,23 +29,6 @@ class PlanningBaseline(PlanningBase):
         return self.plan
 
 
-class ReasoningCOT(ReasoningBase):
-    def __call__(self, task_description: str, feedback: str = ""):
-        examples, task_description = self.process_task_description(task_description)
-        prompt = """Solve the task step by step. Your instructions must follow the examples.
-Here are some examples.
-{examples}
-Here is the task:
-{task_description}"""
-        prompt = prompt.format(task_description=task_description, examples=examples)
-        messages = [{"role": "user", "content": prompt}]
-        reasoning_result = self.llm(
-            messages=messages,
-            temperature=0.1,
-        )
-        return reasoning_result
-
-
 class MySimulationAgent(SimulationAgent):
     """Participant's implementation of SimulationAgent."""
 
@@ -53,7 +36,7 @@ class MySimulationAgent(SimulationAgent):
         """Initialize MySimulationAgent"""
         super().__init__(llm=llm)
         self.planning = PlanningBaseline(llm=self.llm)
-        self.reasoning = ReasoningCOT(profile_type_prompt="", memory=None, llm=self.llm)
+        self.reasoning = ReasoningCOTSC(profile_type_prompt="", memory=None, llm=self.llm)
         self.memory = MemoryGenerative(llm=self.llm)
 
     def workflow(self):
@@ -145,7 +128,7 @@ if __name__ == "__main__":
         simulator.set_task_and_groundtruth(
             task_dir=f"./example/track1/{task_set}/tasks", groundtruth_dir=f"./example/track1/{task_set}/groundtruth"
         )
-        outputs = simulator.run_simulation(number_of_tasks=10, enable_threading=True, max_workers=8)
+        outputs = simulator.run_simulation(number_of_tasks=100, enable_threading=True, max_workers=8)
         evaluation_results = simulator.evaluate()
 
         # dummy agent for logging purposes only
