@@ -16,3 +16,6 @@ __*/
 !__init__.py
 TODO
 db/
+dataset/
+raw_data/
+results*/
