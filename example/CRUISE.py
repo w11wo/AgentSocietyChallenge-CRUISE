@@ -158,16 +158,20 @@ if __name__ == "__main__":
     os.makedirs(f"./example/results_{args.exp_name}", exist_ok=True)
 
     agent_class = MySimulationAgent
+
+    from dotenv import load_dotenv
+    load_dotenv()  # Load the .env file
+
     llm = vLLM(api_key=os.getenv("VLLM_API_KEY"))
 
-    simulator = Simulator(data_dir="dataset/", device="gpu", cache=True)
+    simulator = Simulator(data_dir="dataset/", device="gpu", cache=False)
     simulator.set_agent(agent_class)
     simulator.set_llm(llm)
 
     simulator.set_task_and_groundtruth(
         task_dir=f"./example/track1/{args.dataset}/tasks", groundtruth_dir=f"./example/track1/{args.dataset}/groundtruth"
     )
-    outputs = simulator.run_simulation(number_of_tasks=100, enable_threading=True, max_workers=8)
+    outputs = simulator.run_simulation(number_of_tasks=10, enable_threading=True, max_workers=8)
     evaluation_results = simulator.evaluate()
 
     # close cache database
