@@ -184,6 +184,10 @@ if __name__ == "__main__":
 
     llm = vLLM(api_key=os.getenv("VLLM_API_KEY"))
 
+    # # For testing
+    # simulator = Simulator(data_dir="dataset/", device="gpu", cache=False)
+
+    # For submission
     simulator = Simulator(data_dir="dataset/", device="gpu", cache=True)
     simulator.set_agent(agent_class)
     simulator.set_llm(llm)
@@ -193,9 +197,10 @@ if __name__ == "__main__":
         groundtruth_dir=f"./example/track1/{args.dataset}/groundtruth",
     )
 
-    # # for testing:
-    # outputs = simulator.run_simulation(number_of_tasks=10, enable_threading=True, max_workers=8)
+    # # For testing:
+    # outputs = simulator.run_simulation(number_of_tasks=10, enable_threading=False, max_workers=8)
 
+    # For submission
     outputs = simulator.run_simulation(number_of_tasks=100, enable_threading=True, max_workers=8)
     evaluation_results = simulator.evaluate()
 
