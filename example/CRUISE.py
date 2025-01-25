@@ -189,6 +189,7 @@ if __name__ == "__main__":
 
     # For submission
     simulator = Simulator(data_dir="dataset/", device="gpu", cache=True)
+
     simulator.set_agent(agent_class)
     simulator.set_llm(llm)
 
@@ -202,6 +203,7 @@ if __name__ == "__main__":
 
     # For submission
     outputs = simulator.run_simulation(number_of_tasks=100, enable_threading=True, max_workers=8)
+
     evaluation_results = simulator.evaluate()
 
     # close cache database
