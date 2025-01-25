@@ -1,8 +1,10 @@
 from websocietysimulator.agent import SimulationAgent
 from websocietysimulator.llm import LLMBase
 from websocietysimulator.agent.modules.planning_modules import PlanningBase
-from websocietysimulator.agent.modules.reasoning_modules import ReasoningBase, ReasoningTOT
+from websocietysimulator.agent.modules.reasoning_modules import ReasoningBase
 from websocietysimulator.agent.modules.memory_modules import MemoryGenerative
+
+import re
 
 
 class PlanningBaseline(PlanningBase):
@@ -29,25 +31,44 @@ class PlanningBaseline(PlanningBase):
         return self.plan
 
 
-class CausalRating(ReasoningBase):
-    def __call__(self, task_description: str, initial_user_prompt: str, assistant_response: str, feedback: str = ""):
-        prompt = """Format your response exactly as follows:
-rating: [your rating]
-
+class TreeOfThoughts(ReasoningBase):
+    def __call__(self, task_description: str, feedback: str = ""):
+        examples, task_description = self.process_task_description(task_description)
+        prompt = """Solve the task step by step.
 Here is the task:
 {task_description}"""
-        prompt = prompt.format(task_description=task_description)
-        # messages = [{"role": "user", "content": prompt}]
-        messages = [
-            {"role": "user", "content": initial_user_prompt},
-            {"role": "assistant", "content": assistant_response},
-            {"role": "user", "content": prompt},
-        ]
-        result = self.llm(
-            messages=messages,
-            temperature=0.0,
-        )
-        return result
+        prompt = prompt.format(task_description=task_description, examples=examples)
+        messages = [{"role": "user", "content": prompt}]
+        reasoning_results = self.llm(messages=messages, temperature=0.1, n=3)
+        reasoning_result = self.get_votes(task_description, reasoning_results, examples)
+        return reasoning_result
+
+    def get_votes(self, task_description, reasoning_results, examples):
+        if "think" in reasoning_results[0].lower():
+            return reasoning_results[0]
+        prompt = """Given the reasoning process for two completed tasks and one ongoing task, and several answers for the next step, decide which answer best follows the reasoning process for example command format. Output "The best answer is {{s}}", where s is the integer id chosen.
+Here is the task:
+{task_description}
+
+"""
+        prompt = prompt.format(task_description=task_description, examples=examples)
+        for i, y in enumerate(reasoning_results, 1):
+            prompt += f"Answer {i}:\n{y}\n"
+        messages = [{"role": "user", "content": prompt}]
+        vote_outputs = self.llm(messages=messages, temperature=0.7, n=5)
+        vote_results = [0] * len(reasoning_results)
+        for vote_output in vote_outputs:
+            pattern = r".*best answer is .*(\d+).*"
+            match = re.match(pattern, vote_output, re.DOTALL)
+            if match:
+                vote = int(match.groups()[0]) - 1
+                if vote in range(len(reasoning_results)):
+                    vote_results[vote] += 1
+            else:
+                print(f"vote no match: {[vote_output]}")
+        ids = list(range(len(reasoning_results)))
+        select_id = sorted(ids, key=lambda x: vote_results[x], reverse=True)[0]
+        return reasoning_results[select_id]
 
 
 class MySimulationAgent(SimulationAgent):
@@ -57,8 +78,7 @@ class MySimulationAgent(SimulationAgent):
         """Initialize MySimulationAgent"""
         super().__init__(llm=llm)
         self.planning = PlanningBaseline(llm=self.llm)
-        self.reasoning = ReasoningTOT(profile_type_prompt="", memory=None, llm=self.llm)
-        # self.causal_thinking = CausalRating(profile_type_prompt="", memory=None, llm=self.llm)
+        self.reasoning = TreeOfThoughts(profile_type_prompt="", memory=None, llm=self.llm)
         self.memory = MemoryGenerative(llm=self.llm)
 
     def workflow(self):
@@ -169,7 +189,8 @@ if __name__ == "__main__":
     simulator.set_llm(llm)
 
     simulator.set_task_and_groundtruth(
-        task_dir=f"./example/track1/{args.dataset}/tasks", groundtruth_dir=f"./example/track1/{args.dataset}/groundtruth"
+        task_dir=f"./example/track1/{args.dataset}/tasks",
+        groundtruth_dir=f"./example/track1/{args.dataset}/groundtruth",
     )
 
     # # for testing:
