@@ -5,7 +5,7 @@ from websocietysimulator.agent.modules.reasoning_modules import ReasoningBase
 from websocietysimulator.agent.modules.memory_modules import MemoryGenerative
 
 import re
-
+import ast
 
 class PlanningBaseline(PlanningBase):
     """Inherit from PlanningBase"""
@@ -80,6 +80,47 @@ class MySimulationAgent(SimulationAgent):
         self.planning = PlanningBaseline(llm=self.llm)
         self.reasoning = TreeOfThoughts(profile_type_prompt="", memory=None, llm=self.llm)
         self.memory = MemoryGenerative(llm=self.llm)
+        self.user_profile_cache = {}
+
+    def _build_user_profile(self, user, reviews_user):
+        try:
+            user_data = ast.literal_eval(user)
+        except (SyntaxError, ValueError) as e:
+            print(f"Conversion error: {e}")
+            user_data = {}
+
+        if user not in self.user_profile_cache:
+            profile = self._summarize_user_profile(reviews_user)
+            self.user_profile_cache[user] = profile
+        user_data['profile'] = self.user_profile_cache[user]
+        user = str(user_data)
+        return user
+
+
+    def _summarize_user_profile(self, reviews_user):
+        def convert_to_string(reviews):
+            return json.dumps(reviews, indent=2)
+        reviews_user_str = convert_to_string(reviews_user)
+        profile_making_prompt = f"""
+            The following records refer to a user's past review history, please according to the records, especially the starts and the text that the use left, to briefly summarize the profile and the past review experience of this user.
+            
+            The requirements for the summary:
+                1. Use one sentence to briefly summarize the user's preferences.
+                2. Briefly list the user's review style.
+                3. Briefly list the user's rating tendencies; for instance, is the user more likely to leave high-star or positive reviews, or do they tend to leave negative or low-star reviews?
+                4. Briefly list the user's notable patterns in the reviews;
+                5. briefly summarize the user's past review experience. 
+            
+            Here are the records:
+            
+            {reviews_user_str}
+            
+            Please provide a brief summary.
+            """
+        messages = [{"role": "user", "content": profile_making_prompt}]
+        user_profile = self.llm(messages=messages, temperature=0.1)
+        return user_profile
+
 
     def workflow(self):
         """
@@ -105,6 +146,11 @@ class MySimulationAgent(SimulationAgent):
                 self.memory(f"review: {review_text}")
             reviews_user = self.interaction_tool.get_reviews(user_id=self.task["user_id"])
             review_similar = self.memory(f'{reviews_user[0]["text"]}')
+
+            # # For testing
+            # user = self._build_user_profile(user, reviews_user)
+
+            # todo: remove irrelevant info in item description;
             task_description = f"""
             You are a real human user on {platform}, a platform for crowd-sourced business reviews. Here is your {platform} profile and review history: {user}
 
@@ -143,6 +189,7 @@ class MySimulationAgent(SimulationAgent):
             stars: [your rating]
             review: [your review]
             """
+
             result = self.reasoning(task_description)
 
             try:
@@ -174,13 +221,12 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, choices=["amazon", "yelp", "goodreads"], default="amazon")
     parser.add_argument("--exp_name", type=str, default="baseline")
     args = parser.parse_args()
-
     os.makedirs(f"./example/results_{args.exp_name}", exist_ok=True)
 
     agent_class = MySimulationAgent
 
-    # from dotenv import load_dotenv
-    # load_dotenv()  # Load the .env file
+    from dotenv import load_dotenv
+    load_dotenv()  # Load the .env file
 
     llm = vLLM(api_key=os.getenv("VLLM_API_KEY"))
 
