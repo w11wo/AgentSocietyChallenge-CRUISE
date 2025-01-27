@@ -122,6 +122,23 @@ class MySimulationAgent(SimulationAgent):
         return user_profile
 
 
+    def _clean_business(self, data_):
+        if data_['source'] == "amazon":
+            if 'images' in data_:
+                data_.pop('images')
+            if 'videos' in data_:
+                for item_ in data_['videos']:
+                    if 'url' in item_:
+                        item_.pop('url', None)
+                    if 'user_id' in item_:
+                        item_.pop('user_id', None)
+        elif data_['source'] == "goodreads":
+            data_ = {k: v for k, v in data_.items() if v != '' and k not in ['url', 'link', 'image_url']}
+        elif data_['source'] == "yelp":
+            data_ = {k: v for k, v in data_.items() if v != ''}
+        return str(data_)
+
+
     def workflow(self):
         """
         Simulate user behavior
@@ -140,6 +157,9 @@ class MySimulationAgent(SimulationAgent):
                     user = str(user)
                 elif "business" in sub_task["description"]:
                     business = str(self.interaction_tool.get_item(item_id=self.task["item_id"]))
+                    # For testing: remove noisy info in business
+                    data_ = ast.literal_eval(business)
+                    business = self._clean_business(data_)
             reviews_item = self.interaction_tool.get_reviews(item_id=self.task["item_id"])
             for review in reviews_item:
                 review_text = review["text"]
@@ -147,8 +167,11 @@ class MySimulationAgent(SimulationAgent):
             reviews_user = self.interaction_tool.get_reviews(user_id=self.task["user_id"])
             review_similar = self.memory(f'{reviews_user[0]["text"]}')
 
-            # # For testing
+            # # For testing: add user profile in the prompt;
             # user = self._build_user_profile(user, reviews_user)
+
+            # # For testing: add item review summary in the prompt;
+            # user = self._build_item_review_summary(reviews_item)
 
             # todo: remove irrelevant info in item description;
             task_description = f"""
