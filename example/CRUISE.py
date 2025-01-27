@@ -6,6 +6,7 @@ from websocietysimulator.agent.modules.memory_modules import MemoryGenerative
 
 import re
 import ast
+from datetime import datetime
 
 class PlanningBaseline(PlanningBase):
     """Inherit from PlanningBase"""
@@ -138,6 +139,53 @@ class MySimulationAgent(SimulationAgent):
             data_ = {k: v for k, v in data_.items() if v != ''}
         return str(data_)
 
+    def _build_item_review_summary(self, reviews_items, top_n=5):
+        def calc_average(res_, key):
+            star_values = [reviews_item[key] for reviews_item in res_ if key in reviews_item]
+            average_stars = sum(star_values) / len(star_values)
+            return average_stars
+
+        if len(reviews_items) == 0:
+            return ''
+
+        res_ = []
+
+        if reviews_items[0]['source'] == "amazon":
+            for reviews_item in reviews_items:
+                if all(key in reviews_item for key in ['stars', 'title', 'text', 'helpful_vote', 'source', 'type']) and reviews_item['source'] == 'amazon':
+                    res_.append(reviews_item)
+            average_stars = calc_average(res_, 'stars')
+            prompt = 'The average stars of this business is {}.\n The latest reviews for this business is:\n'.format(average_stars)
+            for idx, reviews_item in enumerate(res_[:top_n], 1):
+                prompt += '{}: {} {}\n'.format(idx, reviews_item['title'], reviews_item['text'])
+            return prompt
+
+        elif reviews_items[0]['source'] == "yelp":
+            for reviews_item in reviews_items:
+                if all(key in reviews_item for key in ['stars', 'useful', 'funny', 'cool', 'text', 'source', 'type', 'date']) and reviews_item['source'] == 'yelp':
+                    res_.append(reviews_item)
+            average_stars = calc_average(res_, 'stars')
+            average_useful = calc_average(res_, 'useful')
+            average_funny = calc_average(res_, 'funny')
+            average_cool = calc_average(res_, 'cool')
+            prompt = 'The average stars of this business is {}.\n The average useful of this business is {}.\n The average funny of this business is {}.\n The average cool of this business is {}.\n The latest reviews for this business is:\n'.format(
+                average_stars, average_useful, average_funny, average_cool)
+            sorted_data = sorted(res_, key=lambda x: datetime.strptime(x['date'], '%Y-%m-%d %H:%M:%S'), reverse=True)
+            for idx, reviews_item in enumerate(sorted_data[:top_n], 1):
+                prompt += '{}: {}\n'.format(idx, reviews_item['text'])
+            return prompt
+
+        elif reviews_items[0]['source'] == "goodreads":
+            for reviews_item in reviews_items:
+                if all(key in reviews_item for key in ['stars', 'text', 'source', 'type', 'date_updated']) and reviews_item['source'] == 'goodreads':
+                    res_.append(reviews_item)
+            average_stars = calc_average(res_, 'stars')
+            prompt = 'The average stars of this business is {}.\n The latest reviews for this business is:\n'.format(
+                average_stars)
+            data_sorted = sorted(res_, key=lambda x: datetime.strptime(x['date_updated'], "%a %b %d %H:%M:%S %z %Y"), reverse=True)
+            for idx, reviews_item in enumerate(data_sorted[:top_n], 1):
+                prompt += '{}: {}\n'.format(idx, reviews_item['text'])
+            return prompt
 
     def workflow(self):
         """
@@ -165,15 +213,15 @@ class MySimulationAgent(SimulationAgent):
                 review_text = review["text"]
                 self.memory(f"review: {review_text}")
             reviews_user = self.interaction_tool.get_reviews(user_id=self.task["user_id"])
-            review_similar = self.memory(f'{reviews_user[0]["text"]}')
+            # review_similar = self.memory(f'{reviews_user[0]["text"]}')
 
             # # For testing: add user profile in the prompt;
             # user = self._build_user_profile(user, reviews_user)
 
-            # # For testing: add item review summary in the prompt;
-            # user = self._build_item_review_summary(reviews_item)
+            # For testing: add item review summary in the prompt;
+            item_review_summary = self._build_item_review_summary(reviews_item)
+            review_similar = item_review_summary
 
-            # todo: remove irrelevant info in item description;
             task_description = f"""
             You are a real human user on {platform}, a platform for crowd-sourced business reviews. Here is your {platform} profile and review history: {user}
 
