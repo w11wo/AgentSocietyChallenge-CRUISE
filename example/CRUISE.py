@@ -269,24 +269,22 @@ class MySimulationAgent(SimulationAgent):
                 review_text = review["text"]
                 self.memory(f"review: {review_text}")
             reviews_user = self.interaction_tool.get_reviews(user_id=self.task["user_id"])
-            review_similar = self.memory(f'{reviews_user[0]["text"]}')
+            # review_similar = self.memory(f'{reviews_user[0]["text"]}')
 
             # # For testing: add user profile in the prompt;
             # user = self._build_user_profile(user, reviews_user)
 
             # For testing: add item review summary in the prompt;
-            item_review_summary = self._build_item_review_summary(reviews_item, summarize_flag=True)
-            # review_similar = item_review_summary
+            item_review_summary = self._build_item_review_summary(reviews_item, summarize_flag=False)
+            review_similar = item_review_summary
 
             task_description = f"""
             You are a real human user on {platform}, a platform for crowd-sourced business reviews. Here is your {platform} profile and review history: {user}
-            
-            The reviews that are the most similar to your review style: {review_similar}
 
             You need to write a review for this business: {business}
 
-            Others have reviewed this business before: {item_review_summary}
-            
+            Others have reviewed this business before: {review_similar}
+
             Please analyze the following aspects carefully:
             1. Based on your user profile and review style, what rating would you give this business? Remember that many users give 5-star ratings for excellent experiences that exceed expectations, and 1-star ratings for very poor experiences that fail to meet basic standards.
             2. Given the business details and your past experiences, what specific aspects would you comment on? Focus on the positive aspects that make this business stand out or negative aspects that severely impact the experience.
