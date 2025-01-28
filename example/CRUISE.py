@@ -80,8 +80,8 @@ class MySimulationAgent(SimulationAgent):
         """Initialize MySimulationAgent"""
         super().__init__(llm=llm)
         self.planning = PlanningBaseline(llm=self.llm)
-        self.reasoning = TreeOfThoughts(profile_type_prompt="", memory=None, llm=self.llm)
-        # self.reasoning = ReasoningTOT(profile_type_prompt="", memory=None, llm=self.llm)
+        # self.reasoning = TreeOfThoughts(profile_type_prompt="", memory=None, llm=self.llm)
+        self.reasoning = ReasoningTOT(profile_type_prompt="", memory=None, llm=self.llm)
         self.memory = MemoryGenerative(llm=self.llm)
         self.user_profile_cache = {}
 
