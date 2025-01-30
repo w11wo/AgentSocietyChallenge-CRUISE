@@ -41,7 +41,7 @@ Here is the task:
 {task_description}"""
         prompt = prompt.format(task_description=task_description, examples=examples)
         messages = [{"role": "user", "content": prompt}]
-        reasoning_results = self.llm(messages=messages, temperature=0.1, n=3)
+        reasoning_results = self.llm(messages=messages, temperature=0.7, n=5)
         reasoning_result = self.get_votes(task_description, reasoning_results, examples)
         return reasoning_result
 
@@ -80,8 +80,8 @@ class MySimulationAgent(SimulationAgent):
         """Initialize MySimulationAgent"""
         super().__init__(llm=llm)
         self.planning = PlanningBaseline(llm=self.llm)
-        # self.reasoning = TreeOfThoughts(profile_type_prompt="", memory=None, llm=self.llm)
-        self.reasoning = ReasoningTOT(profile_type_prompt="", memory=None, llm=self.llm)
+        self.reasoning = TreeOfThoughts(profile_type_prompt="", memory=None, llm=self.llm)
+        # self.reasoning = ReasoningTOT(profile_type_prompt="", memory=None, llm=self.llm)
         self.memory = MemoryGenerative(llm=self.llm)
         self.user_profile_cache = {}
 
@@ -351,8 +351,8 @@ if __name__ == "__main__":
 
     agent_class = MySimulationAgent
 
-    from dotenv import load_dotenv
-    load_dotenv()  # Load the .env file
+    # from dotenv import load_dotenv
+    # load_dotenv()  # Load the .env file
 
     llm = vLLM(api_key=os.getenv("VLLM_API_KEY"))
 
