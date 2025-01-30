@@ -85,20 +85,55 @@ class MySimulationAgent(SimulationAgent):
         self.memory = MemoryGenerative(llm=self.llm)
         self.user_profile_cache = {}
 
-    def _build_user_profile(self, user, reviews_user):
+    def _build_user_profile(self, user, reviews_user, summarize_flag, top_n=5):
         try:
             user_data = ast.literal_eval(user)
         except (SyntaxError, ValueError) as e:
             print(f"Conversion error: {e}")
             user_data = {}
 
-        if user not in self.user_profile_cache:
-            profile = self._summarize_user_profile(reviews_user)
-            self.user_profile_cache[user] = profile
-        user_data['profile'] = self.user_profile_cache[user]
-        user = str(user_data)
-        return user
+        user_str, profile = "", ""
 
+        if user_data['source'] == 'amazon':
+            user_str = user
+            if user_str not in self.user_profile_cache:
+                if summarize_flag is True:
+                    profile = self._summarize_user_profile(reviews_user)
+                else:
+                    required_keys = {'item_id', 'stars', 'text', 'title'}
+                    valid_dicts = [d for d in reviews_user if required_keys.issubset(d.keys())]
+                    profile = ""
+                    for reviews_item in valid_dicts[:top_n]:
+                        profile += "item_id: {}, stars: {}, review title: {}, review: {}\n\n".format(reviews_item['item_id'], reviews_item['stars'], reviews_item['title'], reviews_item['text'])
+
+        elif user_data['source'] == 'yelp':
+            user_str = str({'user_id': user_data['user_id'], 'source': user_data['source']})
+            if user_str not in self.user_profile_cache:
+                if summarize_flag is True:
+                    profile = self._summarize_user_profile(reviews_user)
+                else:
+                    required_keys = {'item_id', 'stars', 'useful', 'funny', 'cool', 'text'}
+                    valid_dicts = [d for d in reviews_user if required_keys.issubset(d.keys())]
+                    profile = ""
+                    for reviews_item in valid_dicts[:top_n]:
+                        profile += "item_id: {}, stars: {}, useful: {}, funny: {}, cool: {}, review: {}\n\n".format(
+                            reviews_item['item_id'], reviews_item['stars'], reviews_item['useful'], reviews_item['funny'], reviews_item['cool'], reviews_item['text'])
+
+        elif user_data['source'] == 'goodreads':
+            user_str = user
+            if user_str not in self.user_profile_cache:
+                if summarize_flag is True:
+                    profile = self._summarize_user_profile(reviews_user)
+                else:
+                    required_keys = {'item_id', 'stars', 'text'}
+                    valid_dicts = [d for d in reviews_user if required_keys.issubset(d.keys())]
+                    profile = ""
+                    for reviews_item in valid_dicts[:top_n]:
+                        profile += "item_id: {}, stars: {}, review: {}\n\n".format(
+                            reviews_item['item_id'], reviews_item['stars'], reviews_item['text'])
+
+        self.user_profile_cache[user_str] = profile
+        return self.user_profile_cache[user_str]
 
     def _summarize_user_profile(self, reviews_user):
         def convert_to_string(reviews):
@@ -271,15 +306,19 @@ class MySimulationAgent(SimulationAgent):
             reviews_user = self.interaction_tool.get_reviews(user_id=self.task["user_id"])
             # review_similar = self.memory(f'{reviews_user[0]["text"]}')
 
-            # # For testing: add user profile in the prompt;
-            # user = self._build_user_profile(user, reviews_user)
+            # For testing: add user profile in the prompt;
+            user_profile = self._build_user_profile(user, reviews_user, summarize_flag=False)
 
             # For testing: add item review summary in the prompt;
             item_review_summary = self._build_item_review_summary(reviews_item, summarize_flag=False)
             review_similar = item_review_summary
 
             task_description = f"""
-            You are a real human user on {platform}, a platform for crowd-sourced business reviews. Here is your {platform} profile and review history: {user}
+            You are a real human user on {platform}, a platform for crowd-sourced business reviews. Here is your {platform} profile:
+            {user}.
+            
+            Below are your past reviews, which provide insight into your review style:
+            {user_profile}
 
             You need to write a review for this business: {business}
 
@@ -344,15 +383,16 @@ if __name__ == "__main__":
     from vllm import vLLM
 
     parser = ArgumentParser()
-    parser.add_argument("--dataset", type=str, choices=["amazon", "yelp", "goodreads"], default="yelp")
+    parser.add_argument("--dataset", type=str, choices=["amazon", "yelp", "goodreads"], default="goodreads")
     parser.add_argument("--exp_name", type=str, default="baseline")
     args = parser.parse_args()
     os.makedirs(f"./example/results_{args.exp_name}", exist_ok=True)
 
     agent_class = MySimulationAgent
 
-    # from dotenv import load_dotenv
-    # load_dotenv()  # Load the .env file
+    # For testing
+    from dotenv import load_dotenv
+    load_dotenv()  # Load the .env file
 
     llm = vLLM(api_key=os.getenv("VLLM_API_KEY"))
 
