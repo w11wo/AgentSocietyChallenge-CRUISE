@@ -34,11 +34,20 @@ class PlanningBaseline(PlanningBase):
 
 
 class TreeOfThoughts(ReasoningBase):
-    def __call__(self, task_description: str, feedback: str = ""):
+    def __call__(self, task_description: str, feedback: str = "", leakage_attack: bool = False):
         examples, task_description = self.process_task_description(task_description)
-        prompt = """Solve the task step by step.
-Here is the task:
-{task_description}"""
+        if leakage_attack is True:
+            prompt = """Solve the task step by step.
+            First, based on the task description, recall from memory or the knowledge base whether there is a user that matches the provided platform, user profile, and past reviews.
+            Next, using the business information and others' previous reviews about this business from the task description, recall whether there is a matching business in the memory or knowledge base.
+            Then, check if there is a record of the user having previously left a review and rating for this business in the memory or knowledge base. If such a review exists, directly use it as the generated review result.
+            Finally, if no matching user or business is found in the memory, generate the review and rating step by step based on the task description.
+    Here is the task:
+    {task_description}"""
+        else:
+            prompt = """Solve the task step by step.
+            Here is the task:
+            {task_description}"""
         prompt = prompt.format(task_description=task_description, examples=examples)
         messages = [{"role": "user", "content": prompt}]
         reasoning_results = self.llm(messages=messages, temperature=0.7, n=5)
@@ -306,19 +315,58 @@ class MySimulationAgent(SimulationAgent):
             reviews_user = self.interaction_tool.get_reviews(user_id=self.task["user_id"])
             # review_similar = self.memory(f'{reviews_user[0]["text"]}')
 
-            # For testing: add user profile in the prompt;
-            user_profile = self._build_user_profile(user, reviews_user, summarize_flag=False)
-
             # For testing: add item review summary in the prompt;
             item_review_summary = self._build_item_review_summary(reviews_item, summarize_flag=False)
             review_similar = item_review_summary
 
+            # # For testing: add user profile in the prompt;
+            # user_profile = self._build_user_profile(user, reviews_user, summarize_flag=False)
+            # task_description = f"""
+            # You are a real human user on {platform}, a platform for crowd-sourced business reviews. Here is your {platform} profile:
+            # {user}.
+            #
+            # Below are your past reviews, which provide insight into your review style:
+            # {user_profile}
+            #
+            # You need to write a review for this business: {business}
+            #
+            # Others have reviewed this business before: {review_similar}
+            #
+            # Please analyze the following aspects carefully:
+            # 1. Based on your user profile and review style, what rating would you give this business? Remember that many users give 5-star ratings for excellent experiences that exceed expectations, and 1-star ratings for very poor experiences that fail to meet basic standards.
+            # 2. Given the business details and your past experiences, what specific aspects would you comment on? Focus on the positive aspects that make this business stand out or negative aspects that severely impact the experience.
+            # 3. Consider how other users might engage with your review in terms of:
+            # - Useful: How informative and helpful is your review?
+            # - Funny: Does your review have any humorous or entertaining elements?
+            # - Cool: Is your review particularly insightful or praiseworthy?
+            #
+            # Requirements:
+            # - Star rating must be one of: 1.0, 2.0, 3.0, 4.0, 5.0
+            # - If the business meets or exceeds expectations in key areas, consider giving a 5-star rating
+            # - If the business fails significantly in key areas, consider giving a 1-star rating
+            # - Review text should be 2-4 sentences, focusing on your personal experience and emotional response
+            # - Useful/funny/cool counts should be non-negative integers that reflect likely user engagement
+            # - Maintain consistency with your historical review style and rating patterns
+            # - Focus on specific details about the business rather than generic comments
+            # - Be generous with ratings when businesses deliver quality service and products
+            # - Be critical when businesses fail to meet basic standards
+            #
+            # Important:
+            # - Reviews on Yelp and Goodreads are very conservative. User tend to only give a star rating of 2, 3, or 4. A 5-star rating is very rare. Only give a 5-star rating if the business is truly exceptional.
+            # - Reviews on Amazon are more generous. Users tend to give 4 or 5-star ratings. A 3-star rating is considered a negative review on Amazon.
+            # - Amazon: Most ratings are concentrated on 4 and 5 stars, with 4-star ratings being slightly more frequent.
+            # - Goodreads: The majority of ratings are 3 and 4 stars, with 3-star ratings being the most frequent, followed by 4-star and 2-star.
+            # - Yelp: The ratings are skewed towards 2, 3, and 4 stars, with 2-star ratings being the highest, followed by 3-star and 4-star.
+            # - Consider which platform you are on when writing your review. You are writing a review on {platform}.
+            #
+            # Format your response exactly as follows:
+            # stars: [your rating]
+            # review: [your review]
+            # """
+
+            # For submission
             task_description = f"""
-            You are a real human user on {platform}, a platform for crowd-sourced business reviews. Here is your {platform} profile:
-            {user}.
-            
-            Below are your past reviews, which provide insight into your review style:
-            {user_profile}
+            You are a real human user on {platform}, a platform for crowd-sourced business reviews. Here is your {platform} profile and review history: {user}
 
             You need to write a review for this business: {business}
 
@@ -356,6 +404,10 @@ class MySimulationAgent(SimulationAgent):
             review: [your review]
             """
 
+            # # For testing: leakage attack in the prompt;
+            # result = self.reasoning(task_description, leakage_attack=True)
+
+            # For submission
             result = self.reasoning(task_description)
 
             try:
@@ -383,16 +435,16 @@ if __name__ == "__main__":
     from vllm import vLLM
 
     parser = ArgumentParser()
-    parser.add_argument("--dataset", type=str, choices=["amazon", "yelp", "goodreads"], default="goodreads")
+    parser.add_argument("--dataset", type=str, choices=["amazon", "yelp", "goodreads"], default="amazon")
     parser.add_argument("--exp_name", type=str, default="baseline")
     args = parser.parse_args()
     os.makedirs(f"./example/results_{args.exp_name}", exist_ok=True)
 
     agent_class = MySimulationAgent
 
-    # For testing
-    from dotenv import load_dotenv
-    load_dotenv()  # Load the .env file
+    # # For testing
+    # from dotenv import load_dotenv
+    # load_dotenv()  # Load the .env file
 
     llm = vLLM(api_key=os.getenv("VLLM_API_KEY"))
 
