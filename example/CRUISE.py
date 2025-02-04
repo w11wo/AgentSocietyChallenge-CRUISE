@@ -8,6 +8,8 @@ import re
 import ast
 import json
 from datetime import datetime
+from collections import Counter
+
 
 class PlanningBaseline(PlanningBase):
     """Inherit from PlanningBase"""
@@ -79,7 +81,15 @@ Here is the task:
                 print(f"vote no match: {[vote_output]}")
         ids = list(range(len(reasoning_results)))
         select_id = sorted(ids, key=lambda x: vote_results[x], reverse=True)[0]
-        return reasoning_results[select_id]
+
+        # get selected review based on LLM voting
+        voted_review = [line for line in reasoning_results[select_id].split("\n") if "review:" in line][0]
+        # get the majority rating based on frequency
+        stars_line = [line for result in reasoning_results for line in result.split("\n") if "stars:" in line]
+        majority_rating = Counter(stars_line).most_common(1)[0][0]
+        # collate the reasoning result
+        reasoning_result = f"{majority_rating}\n{voted_review}"
+        return reasoning_result
 
 
 class MySimulationAgent(SimulationAgent):
@@ -103,43 +113,52 @@ class MySimulationAgent(SimulationAgent):
 
         user_str, profile = "", ""
 
-        if user_data['source'] == 'amazon':
+        if user_data["source"] == "amazon":
             user_str = user
             if user_str not in self.user_profile_cache:
                 if summarize_flag is True:
                     profile = self._summarize_user_profile(reviews_user)
                 else:
-                    required_keys = {'item_id', 'stars', 'text', 'title'}
+                    required_keys = {"item_id", "stars", "text", "title"}
                     valid_dicts = [d for d in reviews_user if required_keys.issubset(d.keys())]
                     profile = ""
                     for reviews_item in valid_dicts[:top_n]:
-                        profile += "item_id: {}, stars: {}, review title: {}, review: {}\n\n".format(reviews_item['item_id'], reviews_item['stars'], reviews_item['title'], reviews_item['text'])
+                        profile += "item_id: {}, stars: {}, review title: {}, review: {}\n\n".format(
+                            reviews_item["item_id"], reviews_item["stars"], reviews_item["title"], reviews_item["text"]
+                        )
 
-        elif user_data['source'] == 'yelp':
-            user_str = str({'user_id': user_data['user_id'], 'source': user_data['source']})
+        elif user_data["source"] == "yelp":
+            user_str = str({"user_id": user_data["user_id"], "source": user_data["source"]})
             if user_str not in self.user_profile_cache:
                 if summarize_flag is True:
                     profile = self._summarize_user_profile(reviews_user)
                 else:
-                    required_keys = {'item_id', 'stars', 'useful', 'funny', 'cool', 'text'}
+                    required_keys = {"item_id", "stars", "useful", "funny", "cool", "text"}
                     valid_dicts = [d for d in reviews_user if required_keys.issubset(d.keys())]
                     profile = ""
                     for reviews_item in valid_dicts[:top_n]:
                         profile += "item_id: {}, stars: {}, useful: {}, funny: {}, cool: {}, review: {}\n\n".format(
-                            reviews_item['item_id'], reviews_item['stars'], reviews_item['useful'], reviews_item['funny'], reviews_item['cool'], reviews_item['text'])
+                            reviews_item["item_id"],
+                            reviews_item["stars"],
+                            reviews_item["useful"],
+                            reviews_item["funny"],
+                            reviews_item["cool"],
+                            reviews_item["text"],
+                        )
 
-        elif user_data['source'] == 'goodreads':
+        elif user_data["source"] == "goodreads":
             user_str = user
             if user_str not in self.user_profile_cache:
                 if summarize_flag is True:
                     profile = self._summarize_user_profile(reviews_user)
                 else:
-                    required_keys = {'item_id', 'stars', 'text'}
+                    required_keys = {"item_id", "stars", "text"}
                     valid_dicts = [d for d in reviews_user if required_keys.issubset(d.keys())]
                     profile = ""
                     for reviews_item in valid_dicts[:top_n]:
                         profile += "item_id: {}, stars: {}, review: {}\n\n".format(
-                            reviews_item['item_id'], reviews_item['stars'], reviews_item['text'])
+                            reviews_item["item_id"], reviews_item["stars"], reviews_item["text"]
+                        )
 
         self.user_profile_cache[user_str] = profile
         return self.user_profile_cache[user_str]
@@ -147,6 +166,7 @@ class MySimulationAgent(SimulationAgent):
     def _summarize_user_profile(self, reviews_user):
         def convert_to_string(reviews):
             return json.dumps(reviews, indent=2)
+
         reviews_user_str = convert_to_string(reviews_user)
         profile_making_prompt = f"""
             The following records refer to a user's past review history, please according to the records, especially the starts and the text that the use left, to briefly summarize the profile and the past review experience of this user.
@@ -171,23 +191,28 @@ class MySimulationAgent(SimulationAgent):
     def _summarize_business_reviews(self, reviews_items):
         def convert_to_string(reviews):
             return json.dumps(reviews, indent=2)
-        reviews_bus_str = ''
-        if reviews_items[0]['source'] == 'amazon':
-            for reviews_item in reviews_items:
-                data_ = {k: v for k, v in reviews_item.items() if v != '' and k in ['helpful_vote', 'stars', 'title', 'text']}
-                reviews_bus_str += convert_to_string(data_) + '\n'
 
-        elif reviews_items[0]['source'] == 'yelp':
+        reviews_bus_str = ""
+        if reviews_items[0]["source"] == "amazon":
             for reviews_item in reviews_items:
-                data_ = {k: v for k, v in reviews_item.items() if
-                         v != '' and k in ['cool', 'stars', 'useful', 'funny', 'text']}
-                reviews_bus_str += convert_to_string(data_) + '\n'
+                data_ = {
+                    k: v for k, v in reviews_item.items() if v != "" and k in ["helpful_vote", "stars", "title", "text"]
+                }
+                reviews_bus_str += convert_to_string(data_) + "\n"
 
-        elif reviews_items[0]['source'] == 'goodreads':
+        elif reviews_items[0]["source"] == "yelp":
             for reviews_item in reviews_items:
-                data_ = {k: v for k, v in reviews_item.items() if
-                         v != '' and k in ['n_votes', 'stars', 'text']}
-                reviews_bus_str += convert_to_string(data_) + '\n'
+                data_ = {
+                    k: v
+                    for k, v in reviews_item.items()
+                    if v != "" and k in ["cool", "stars", "useful", "funny", "text"]
+                }
+                reviews_bus_str += convert_to_string(data_) + "\n"
+
+        elif reviews_items[0]["source"] == "goodreads":
+            for reviews_item in reviews_items:
+                data_ = {k: v for k, v in reviews_item.items() if v != "" and k in ["n_votes", "stars", "text"]}
+                reviews_bus_str += convert_to_string(data_) + "\n"
 
         profile_making_prompt = f"""
             The following records refer to past user reviews of the current business. Based on the records, particularly the scores and the text left by the users, please provide a brief summary of users' evaluations of this business.
@@ -208,21 +233,20 @@ class MySimulationAgent(SimulationAgent):
         business_summary = self.llm(messages=messages, temperature=0.1)
         return business_summary
 
-
     def _clean_business(self, data_):
-        if data_['source'] == "amazon":
-            if 'images' in data_:
-                data_.pop('images')
-            if 'videos' in data_:
-                for item_ in data_['videos']:
-                    if 'url' in item_:
-                        item_.pop('url', None)
-                    if 'user_id' in item_:
-                        item_.pop('user_id', None)
-        elif data_['source'] == "goodreads":
-            data_ = {k: v for k, v in data_.items() if v != '' and k not in ['url', 'link', 'image_url']}
-        elif data_['source'] == "yelp":
-            data_ = {k: v for k, v in data_.items() if v != ''}
+        if data_["source"] == "amazon":
+            if "images" in data_:
+                data_.pop("images")
+            if "videos" in data_:
+                for item_ in data_["videos"]:
+                    if "url" in item_:
+                        item_.pop("url", None)
+                    if "user_id" in item_:
+                        item_.pop("user_id", None)
+        elif data_["source"] == "goodreads":
+            data_ = {k: v for k, v in data_.items() if v != "" and k not in ["url", "link", "image_url"]}
+        elif data_["source"] == "yelp":
+            data_ = {k: v for k, v in data_.items() if v != ""}
         return str(data_)
 
     def _build_item_review_summary(self, reviews_items, top_n=5, summarize_flag=False):
@@ -232,59 +256,85 @@ class MySimulationAgent(SimulationAgent):
             return average_stars
 
         if len(reviews_items) == 0:
-            return ''
+            return ""
 
         res_ = []
 
-        if reviews_items[0]['source'] == "amazon":
+        if reviews_items[0]["source"] == "amazon":
             for reviews_item in reviews_items:
-                if all(key in reviews_item for key in ['stars', 'title', 'text', 'helpful_vote', 'source', 'type']) and reviews_item['source'] == 'amazon':
+                if (
+                    all(key in reviews_item for key in ["stars", "title", "text", "helpful_vote", "source", "type"])
+                    and reviews_item["source"] == "amazon"
+                ):
                     res_.append(reviews_item)
-            average_stars = calc_average(res_, 'stars')
+            average_stars = calc_average(res_, "stars")
             if summarize_flag is False:
-                prompt = 'The average stars of this business is {}.\n\n The latest reviews for this business is:\n'.format(average_stars)
+                prompt = (
+                    "The average stars of this business is {}.\n\n The latest reviews for this business is:\n".format(
+                        average_stars
+                    )
+                )
             else:
                 summary_ = self._summarize_business_reviews(res_)
-                prompt = 'The average stars of this business is {}.\n {} \n\n The latest reviews for this business is:\n'.format(
-                    average_stars, summary_)
+                prompt = "The average stars of this business is {}.\n {} \n\n The latest reviews for this business is:\n".format(
+                    average_stars, summary_
+                )
             for idx, reviews_item in enumerate(res_[:top_n], 1):
-                prompt += '{}: {} {}\n'.format(idx, reviews_item['title'], reviews_item['text'])
+                prompt += "{}: {} {}\n".format(idx, reviews_item["title"], reviews_item["text"])
             return prompt
 
-        elif reviews_items[0]['source'] == "yelp":
+        elif reviews_items[0]["source"] == "yelp":
             for reviews_item in reviews_items:
-                if all(key in reviews_item for key in ['stars', 'useful', 'funny', 'cool', 'text', 'source', 'type', 'date']) and reviews_item['source'] == 'yelp':
+                if (
+                    all(
+                        key in reviews_item
+                        for key in ["stars", "useful", "funny", "cool", "text", "source", "type", "date"]
+                    )
+                    and reviews_item["source"] == "yelp"
+                ):
                     res_.append(reviews_item)
-            average_stars = calc_average(res_, 'stars')
-            average_useful = calc_average(res_, 'useful')
-            average_funny = calc_average(res_, 'funny')
-            average_cool = calc_average(res_, 'cool')
+            average_stars = calc_average(res_, "stars")
+            average_useful = calc_average(res_, "useful")
+            average_funny = calc_average(res_, "funny")
+            average_cool = calc_average(res_, "cool")
             if summarize_flag is False:
-                prompt = 'The average stars of this business is {}.\n The average useful of this business is {}.\n The average funny of this business is {}.\n The average cool of this business is {}.\n\n The latest reviews for this business is:\n'.format(
-                    average_stars, average_useful, average_funny, average_cool)
+                prompt = "The average stars of this business is {}.\n The average useful of this business is {}.\n The average funny of this business is {}.\n The average cool of this business is {}.\n\n The latest reviews for this business is:\n".format(
+                    average_stars, average_useful, average_funny, average_cool
+                )
             else:
                 summary_ = self._summarize_business_reviews(res_)
-                prompt = 'The average stars of this business is {}.\n The average useful of this business is {}.\n The average funny of this business is {}.\n The average cool of this business is {}.\n {} \n\n The latest reviews for this business is:\n'.format(
-                    average_stars, average_useful, average_funny, average_cool, summary_)
-            sorted_data = sorted(res_, key=lambda x: datetime.strptime(x['date'], '%Y-%m-%d %H:%M:%S'), reverse=True)
+                prompt = "The average stars of this business is {}.\n The average useful of this business is {}.\n The average funny of this business is {}.\n The average cool of this business is {}.\n {} \n\n The latest reviews for this business is:\n".format(
+                    average_stars, average_useful, average_funny, average_cool, summary_
+                )
+            sorted_data = sorted(res_, key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d %H:%M:%S"), reverse=True)
             for idx, reviews_item in enumerate(sorted_data[:top_n], 1):
-                prompt += '{}: {}\n'.format(idx, reviews_item['text'])
+                prompt += "{}: {}\n".format(idx, reviews_item["text"])
             return prompt
 
-        elif reviews_items[0]['source'] == "goodreads":
+        elif reviews_items[0]["source"] == "goodreads":
             for reviews_item in reviews_items:
-                if all(key in reviews_item for key in ['stars', 'text', 'source', 'type', 'date_updated']) and reviews_item['source'] == 'goodreads':
+                if (
+                    all(key in reviews_item for key in ["stars", "text", "source", "type", "date_updated"])
+                    and reviews_item["source"] == "goodreads"
+                ):
                     res_.append(reviews_item)
-            average_stars = calc_average(res_, 'stars')
+            average_stars = calc_average(res_, "stars")
             if summarize_flag is False:
-                prompt = 'The average stars of this business is {}.\n\n The latest reviews for this business is:\n'.format(
-                    average_stars)
+                prompt = (
+                    "The average stars of this business is {}.\n\n The latest reviews for this business is:\n".format(
+                        average_stars
+                    )
+                )
             else:
                 summary_ = self._summarize_business_reviews(res_)
-                prompt = 'The average stars of this business is {}.\n {} \n\n The latest reviews for this business is:\n'.format(average_stars, summary_)
-            data_sorted = sorted(res_, key=lambda x: datetime.strptime(x['date_updated'], "%a %b %d %H:%M:%S %z %Y"), reverse=True)
+                prompt = "The average stars of this business is {}.\n {} \n\n The latest reviews for this business is:\n".format(
+                    average_stars, summary_
+                )
+            data_sorted = sorted(
+                res_, key=lambda x: datetime.strptime(x["date_updated"], "%a %b %d %H:%M:%S %z %Y"), reverse=True
+            )
             for idx, reviews_item in enumerate(data_sorted[:top_n], 1):
-                prompt += '{}: {}\n'.format(idx, reviews_item['text'])
+                prompt += "{}: {}\n".format(idx, reviews_item["text"])
             return prompt
 
     def workflow(self):
