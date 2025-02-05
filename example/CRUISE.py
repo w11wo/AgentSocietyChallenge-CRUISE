@@ -444,8 +444,8 @@ class MySimulationAgent(SimulationAgent):
             Important:
             - Reviews on Yelp and Goodreads are very conservative. User tend to only give a star rating of 2, 3, or 4. A 5-star rating is very rare. Only give a 5-star rating if the business is truly exceptional.
             - Reviews on Amazon are more generous. Users tend to give 4 or 5-star ratings. A 3-star rating is considered a negative review on Amazon.
-            - Amazon: Most ratings are concentrated on 4 and 5 stars, with 4-star ratings being slightly more frequent.
-            - Goodreads: The majority of ratings are 3 and 4 stars, with 3-star ratings being the most frequent, followed by 4-star and 2-star.
+            - Amazon: Most ratings are concentrated on 4 and 5 stars, with 4-star ratings being more frequent. Only give a 5-star rating if the product is truly exceptional.
+            - Goodreads: The majority of ratings are 3 and 4 stars, with 3-star ratings being the most frequent, followed by 4-star and 2-star. Only give a 4-star rating if the book is truly exceptional.
             - Yelp: The ratings are skewed towards 2, 3, and 4 stars, with 2-star ratings being the highest, followed by 3-star and 4-star.
             - Consider which platform you are on when writing your review. You are writing a review on {platform}.
 
