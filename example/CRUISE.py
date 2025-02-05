@@ -52,7 +52,7 @@ class TreeOfThoughts(ReasoningBase):
             {task_description}"""
         prompt = prompt.format(task_description=task_description, examples=examples)
         messages = [{"role": "user", "content": prompt}]
-        reasoning_results = self.llm(messages=messages, temperature=0.7, n=5)
+        reasoning_results = self.llm(messages=messages, temperature=0.7, n=3)
         reasoning_result = self.get_votes(task_description, reasoning_results, examples)
         return reasoning_result
 
@@ -359,15 +359,14 @@ class MySimulationAgent(SimulationAgent):
                     data_ = ast.literal_eval(business)
                     business = self._clean_business(data_)
             reviews_item = self.interaction_tool.get_reviews(item_id=self.task["item_id"])
-            for review in reviews_item:
-                review_text = review["text"]
-                self.memory(f"review: {review_text}")
-            reviews_user = self.interaction_tool.get_reviews(user_id=self.task["user_id"])
+            # for review in reviews_item:
+            #     review_text = review["text"]
+            #     self.memory(f"review: {review_text}")
+            # reviews_user = self.interaction_tool.get_reviews(user_id=self.task["user_id"])
             # review_similar = self.memory(f'{reviews_user[0]["text"]}')
 
             # For testing: add item review summary in the prompt;
             item_review_summary = self._build_item_review_summary(reviews_item, summarize_flag=False)
-            review_similar = item_review_summary
 
             # # For testing: add user profile in the prompt;
             # user_profile = self._build_user_profile(user, reviews_user, summarize_flag=False)
@@ -380,7 +379,7 @@ class MySimulationAgent(SimulationAgent):
             #
             # You need to write a review for this business: {business}
             #
-            # Others have reviewed this business before: {review_similar}
+            # Others have reviewed this business before: {item_review_summary}
             #
             # Please analyze the following aspects carefully:
             # 1. Based on your user profile and review style, what rating would you give this business? Remember that many users give 5-star ratings for excellent experiences that exceed expectations, and 1-star ratings for very poor experiences that fail to meet basic standards.
@@ -420,7 +419,7 @@ class MySimulationAgent(SimulationAgent):
 
             You need to write a review for this business: {business}
 
-            Others have reviewed this business before: {review_similar}
+            Others have reviewed this business before: {item_review_summary}
 
             Please analyze the following aspects carefully:
             1. Based on your user profile and review style, what rating would you give this business? Remember that many users give 5-star ratings for excellent experiences that exceed expectations, and 1-star ratings for very poor experiences that fail to meet basic standards.
