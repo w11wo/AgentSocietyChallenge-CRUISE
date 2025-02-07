@@ -36,9 +36,9 @@ class PlanningBaseline(PlanningBase):
 
 
 class TreeOfThoughts(ReasoningBase):
-    def __call__(self, task_description: str, feedback: str = "", leakage_attack: bool = False):
+    def __call__(self, task_description: str, feedback: str = "", deep_think: bool = False):
         examples, task_description = self.process_task_description(task_description)
-        if leakage_attack is True:
+        if deep_think is True:
             prompt = """Solve the task step by step.
             First, based on the task description, recall from memory or the knowledge base whether there is a user that matches the provided platform, user profile, and past reviews.
             Next, using the business information and others' previous reviews about this business from the task description, recall whether there is a matching business in the memory or knowledge base.
@@ -280,7 +280,7 @@ class MySimulationAgent(SimulationAgent):
                     average_stars, summary_
                 )
             for idx, reviews_item in enumerate(res_[:top_n], 1):
-                prompt += "{}: {} {}\n".format(idx, reviews_item["title"], reviews_item["text"])
+                prompt += "{}: stars: {}, helpful_vote: {}, title: {}, review: {}\n".format(idx, reviews_item["stars"], reviews_item["helpful_vote"], reviews_item["title"], reviews_item["text"])
             return prompt
 
         elif reviews_items[0]["source"] == "yelp":
@@ -308,7 +308,7 @@ class MySimulationAgent(SimulationAgent):
                 )
             sorted_data = sorted(res_, key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d %H:%M:%S"), reverse=True)
             for idx, reviews_item in enumerate(sorted_data[:top_n], 1):
-                prompt += "{}: {}\n".format(idx, reviews_item["text"])
+                prompt += "{}: stars: {}, review: {}\n".format(idx, reviews_item["stars"], reviews_item["text"])
             return prompt
 
         elif reviews_items[0]["source"] == "goodreads":
@@ -334,7 +334,7 @@ class MySimulationAgent(SimulationAgent):
                 res_, key=lambda x: datetime.strptime(x["date_updated"], "%a %b %d %H:%M:%S %z %Y"), reverse=True
             )
             for idx, reviews_item in enumerate(data_sorted[:top_n], 1):
-                prompt += "{}: {}\n".format(idx, reviews_item["text"])
+                prompt += "{}: stars: {}, review: {}\n".format(idx, reviews_item["stars"], reviews_item["text"])
             return prompt
 
     def workflow(self):
@@ -453,11 +453,8 @@ class MySimulationAgent(SimulationAgent):
             review: [your review]
             """
 
-            # # For testing: leakage attack in the prompt;
-            # result = self.reasoning(task_description, leakage_attack=True)
-
-            # For submission
-            result = self.reasoning(task_description)
+            # For testing: deep thinking in the prompt;
+            result = self.reasoning(task_description, deep_think=False)
 
             try:
                 stars_line = [line for line in result.split("\n") if "stars:" in line][0]
