@@ -74,7 +74,7 @@ class TreeOfThoughts(ReasoningBase):
             {task_description}"""
             prompt = prompt.format(task_description=task_description, examples=examples)
         messages = [{"role": "user", "content": prompt}]
-        reasoning_results = self.llm(messages=messages, temperature=0.7, n=3)
+        reasoning_results = self.llm(messages=messages, temperature=0.1, n=3)
         reasoning_result = self.get_votes(task_description, reasoning_results, examples)
         return reasoning_result
 
@@ -90,7 +90,7 @@ Here is the task:
         for i, y in enumerate(reasoning_results, 1):
             prompt += f"Answer {i}:\n{y}\n"
         messages = [{"role": "user", "content": prompt}]
-        vote_outputs = self.llm(messages=messages, temperature=0.1, n=3)
+        vote_outputs = self.llm(messages=messages, temperature=0.7, n=3)
         vote_results = [0] * len(reasoning_results)
         for vote_output in vote_outputs:
             pattern = r".*best answer is .*(\d+).*"
